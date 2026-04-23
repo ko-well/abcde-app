@@ -111,5 +111,14 @@ if submit_btn:
                 st.success("分析が完了しました！")
                 st.markdown("---")
                 st.markdown(response.text)
+                
+                # --- 追加：ダウンロードボタン ---
+                st.markdown("---")
+                st.download_button(
+                    label="📝 この分析結果をテキストファイルで保存（ダウンロード）する",
+                    data=response.text,
+                    file_name="abcde_result.txt",
+                    mime="text/plain"
+                )
             except Exception as e:
                 st.error(f"エラーが発生しました。詳細: {e}")
