@@ -1,0 +1,80 @@
+import streamlit as st
+import google.generativeai as genai
+
+# --- ページ設定とデザイン ---
+st.set_page_config(page_title="ABCDE理論 思考の変換サポートAI", layout="wide")
+
+st.markdown("""
+<style>
+h1, h2, h3 { color: #1A5276 !important; }
+label p, [data-testid="stWidgetLabel"] p { font-size: 18px !important; color: #2874A6 !important; font-weight: bold !important; }
+[data-testid="stFormSubmitButton"] { display: flex; justify-content: center; margin-top: 20px; margin-bottom: 20px; }
+[data-testid="stFormSubmitButton"] button { background-color: #E67E22 !important; color: white !important; font-size: 20px !important; font-weight: bold !important; padding: 15px 50px !important; border-radius: 10px !important; border: none !important; }
+[data-testid="stFormSubmitButton"] button:hover { background-color: #D35400 !important; }
+</style>
+""", unsafe_allow_html=True)
+
+st.title("ABCDE理論 思考の変換サポートAI")
+st.write("モヤモヤする出来事と思い込みを入力すると、AIが客観的な視点で「合理的な思考」への変換をサポートします。")
+
+# --- はじめての方へ（APIキー入力） ---
+with st.expander("🔑 ご利用には無料のAPIキーが必要です（取得方法はこちら）", expanded=False):
+    st.markdown("（※ここに前回と同じAPIキーの取得手順の案内文が入ります）")
+
+st.sidebar.header("🔑 セキュリティ設定")
+api_key = st.sidebar.text_input("Gemini APIキー", type="password")
+
+# --- 入力フォーム ---
+with st.form("abcde_form"):
+    st.subheader("【A】出来事（Activating Event）")
+    event = st.text_area("あなたを悩ませている、または感情が揺さぶられた「客観的な出来事」を書いてください。")
+    
+    st.subheader("【B】信念・思い込み（Belief）")
+    belief = st.text_area("その出来事に対して、あなたは「どうあるべきだ」「どうせ〜だ」と考えましたか？")
+    
+    st.subheader("【C】結果・感情（Consequence）")
+    consequence = st.text_area("その結果、どんなネガティブな感情（怒り、不安、落ち込みなど）や行動が生じましたか？")
+
+    st.markdown("---")
+    agreement = st.checkbox("⚠️【確認】AIの提案はひとつの客観的な視点として受け止め、自分自身の思考を整理するために活用します。")
+    submit_btn = st.form_submit_button("D（反論）とE（効果）をAIに相談する")
+
+# --- 実行処理 ---
+if submit_btn:
+    if not agreement:
+        st.error("⚠️ 実行するには、上の確認事項にチェックを入れてください。")
+    elif not api_key:
+        st.error("⚠️ 左側のメニューにAPIキーを入力してください。")
+    elif not event or not belief:
+        st.warning("⚠️ 「出来事」と「信念・思い込み」は最低限入力してください。")
+    else:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-2.5-flash')
+
+        prompt = f"""
+        あなたは経験豊富な心理カウンセラーであり、キャリアコンサルタントです。
+        アルバート・エリスのABCDE理論（論理療法）に基づき、クライアントの非合理的な思い込み（イラショナル・ビリーフ）を、柔軟で合理的な思考（ラショナル・ビリーフ）へと変容させるためのサポートを行ってください。
+
+        【クライアントの入力情報】
+        - A（出来事）: {event}
+        - B（信念）: {belief}
+        - C（結果・感情）: {consequence}
+
+        【出力要件】
+        以下の2つのセクションに分けて、温かく受容的なトーンで出力してください。
+
+        1. 【D】Dispute（反論・問いかけ）
+        クライアントの「B（信念）」に対する非合理性を優しく指摘し、別の視点に気づかせるための具体的な問いかけや客観的な反論を3つ提示してください。
+        
+        2. 【E】Effect（効果・新しい信念）
+        Dの反論を踏まえ、クライアントが心を軽くするための「新しい合理的な思考（ラショナル・ビリーフ）」の候補を2パターン提案し、前向きな行動を促す励ましの言葉を添えてください。
+        """
+
+        with st.spinner('AIが客観的な視点を整理しています...'):
+            try:
+                response = model.generate_content(prompt)
+                st.success("分析が完了しました！")
+                st.markdown("---")
+                st.markdown(response.text)
+            except Exception as e:
+                st.error(f"エラーが発生しました。詳細: {e}")
