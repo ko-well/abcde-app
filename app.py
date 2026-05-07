@@ -120,11 +120,27 @@ if submit_btn:
                 st.markdown("---")
                 st.markdown(response.text)
                 
+# --- ダウンロード用のテキストを組み立てる ---
+                download_text = f"""【あなたの入力内容】
+■【A】出来事（Activating Event）
+{event}
+
+■【B】信念・思い込み（Belief）
+{belief}
+
+■【C】結果・感情（Consequence）
+{consequence}
+
+==================================================
+【AIからの分析結果】
+{response.text}
+"""
+                
                 # --- ダウンロードボタン ---
                 st.markdown("---")
                 st.download_button(
-                    label="📝 この分析結果をテキストファイルで保存（ダウンロード）する",
-                    data=response.text,
+                    label="📝 入力内容と分析結果を保存（ダウンロード）する",
+                    data=download_text,
                     file_name="abcde_result.txt",
                     mime="text/plain"
                 )
