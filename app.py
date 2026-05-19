@@ -1,148 +1,227 @@
 import streamlit as st
 import google.generativeai as genai
 
-# --- ページ設定とデザイン ---
-st.set_page_config(page_title="ABCDE理論 思考の変換サポートAI", layout="wide")
+# --- ページ設定 ---
+st.set_page_config(page_title="心のモヤモヤ解消・ストレスケアアシスタント", layout="centered")
 
 st.markdown("""
 <style>
-h1, h2, h3 { color: #1A5276 !important; }
-label p, [data-testid="stWidgetLabel"] p { font-size: 18px !important; color: #2874A6 !important; font-weight: bold !important; }
-[data-testid="stFormSubmitButton"] { display: flex; justify-content: center; margin-top: 20px; margin-bottom: 20px; }
-[data-testid="stFormSubmitButton"] button { background-color: #E67E22 !important; color: white !important; font-size: 20px !important; font-weight: bold !important; padding: 15px 50px !important; border-radius: 10px !important; border: none !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-[data-testid="stFormSubmitButton"] button:hover { background-color: #D35400 !important; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+h1, h2, h3 { color: #2C3E50 !important; }
+label p, [data-testid="stWidgetLabel"] p { font-size: 18px !important; color: #2E86C1 !important; font-weight: bold !important; }
+[data-testid="stFormSubmitButton"] button, .main-btn button { background-color: #34495E !important; color: white !important; font-size: 18px !important; font-weight: bold !important; width: 100% !important; border-radius: 8px !important; padding: 10px !important; }
+.共感ボックス { background-color: #FADBD8; padding: 15px; border-radius: 8px; border-left: 5px solid #E74C3C; margin-bottom: 20px; }
+.反論ボックス { background-color: #EBF5FB; padding: 15px; border-radius: 8px; border-left: 5px solid #3498DB; margin-bottom: 20px; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("ABCDE理論 思考の変換サポートAI")
-st.write("モヤモヤする出来事と思い込みを入力すると，AIが客観的な視点で「合理的な思考」への変換をサポートします。")
+# 💡 ご要望3：タイトルの変更と「ver.2」の小文字・スペース表示
+st.markdown("<h1>💡 心のモヤモヤ解消・ストレスケアアシスタント <small style='font-size: 16px; color: #7F8C8D; font-weight: normal; vertical-align: middle;'>ver.2</small></h1>", unsafe_allow_html=True)
 
-# --- はじめての方へ（APIキー入力） ---
-with st.expander("🔑 ご利用には無料のAPIキーが必要です（取得方法はこちら）", expanded=False):
-    st.markdown("""
-    **Q. 「API（エーピーアイ）」って何ですか？** A. このアプリの画面と，裏側で客観的な視点を提供する「AI（頭脳）」を安全に繋ぐための「専用の直通電話」のようなものです。この高性能なAIを無料で利用していただくための「通行手形」として，利用者様ご自身に取得をお願いしております。（※もちろん料金が発生することはありませんので，ご安心ください）
+# 💡 ご要望2：求職者や働く人に向けた優しい説明文への変更
+st.write("就職活動や仕事の中で感じるストレス，対人関係のモヤモヤした出来事を書き出すことで，AIがあなたの心に寄り添いながら，気持ちが軽くなる『新しい捉え方』を一緒に見つけます。")
+st.markdown("---")
 
-    ---
-    **【図解】無料APIキーの取得手順（所要時間：約3分）**
-    
-    **ステップ1：Google AI Studioにアクセス** Googleアカウントにログインした状態で，[Google AI Studio](https://aistudio.google.com/) にアクセスします。
-
-    **ステップ2：APIキーを発行** 画面左側のメニューから「Get API key」を選び，「Create API key」ボタンをクリックして新しいキーを作成します。
-
-    **ステップ3：キーをコピーしてアプリに貼り付け** 画面に表示された `AIza...` から始まる長い文字列をコピーし，このアプリの左側（サイドバー）にある「Gemini APIキー」の入力欄に貼り付けてください。設定はこれだけで完了です！
-    """)
-
+# --- APIキー設定 ---
 st.sidebar.header("🔑 セキュリティ設定")
 api_key = st.sidebar.text_input("Gemini APIキー", type="password")
 
-# --- 入力フォーム ---
-with st.form("abcde_form"):
-    st.subheader("【事前情報】あなた自身について（任意）")
-    st.caption("※入力していただくと，AIがあなたの経験や立場に寄り添った，より実践的なアドバイスを提供しやすくなります。")
-    
-   # 追加：お名前入力欄
-    nickname = st.text_input("お名前（相談結果にてあなたのお名前で表現します。苗字（ひらがなでも可）のみでも構いません）")
+# --- セッション状態の初期化 ---
+if 'abcde_step' not in st.session_state:
+    st.session_state.abcde_step = 1
 
-    col1, col2 = st.columns(2)
-    with col1:
-        age_group = st.selectbox("年代", ["回答しない", "10代", "20代", "30代", "40代", "50代", "60代以上"])
-    with col2:
-        current_status = st.selectbox("現在の状況", ["回答しない", "求職中", "在職中", "職業訓練中", "学生", "その他"])
-    
-    background = st.text_area("これまでの経験や得意なこと（例：事務経験10年，コツコツ作業が得意，など）")
-
-    st.markdown("---")
-
-    st.subheader("【A】出来事（Activating Event）")
-    event = st.text_area("あなたを悩ませている，または感情が揺さぶられた「客観的な出来事」を書いてください。")
-    
-    st.subheader("【B】信念・思い込み（Belief）")
-    belief = st.text_area("その出来事に対して，あなたは「どうあるべきだ」「どうせ〜だ」と考えましたか？")
-    
-    st.subheader("【C】結果・感情（Consequence）")
-    consequence = st.text_area("その結果，どんなネガティブな感情（怒り，不安，落ち込みなど）や行動が生じましたか？")
-
-    st.markdown("---")
-    agreement = st.checkbox("⚠️【確認】AIの提案はひとつの客観的な視点として受け止め，自分自身の思考を整理するために活用します。")
-    submit_btn = st.form_submit_button("D（反論）とE（効果）をAIに相談する")
-
-# --- 実行処理 ---
-if submit_btn:
-    if not agreement:
-        st.error("⚠️ 実行するには，上の確認事項にチェックを入れてください。")
-    elif not api_key:
-        st.error("⚠️ 左側のメニューにAPIキーを入力してください。")
-    elif not event or not belief:
-        st.warning("⚠️ 「出来事」と「信念・思い込み」は最低限入力してください。")
-    else:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-2.5-flash')
-
-        # 名前の出し分け処理（入力がなければ「あなた」とする）
-        user_name = nickname if nickname else "あなた"
-
-        prompt = f"""
-        あなたは経験豊富な心理カウンセラーであり，キャリアコンサルタントです。
-        アルバート・エリスのABCDE理論（論理療法）に基づき，クライアントの非合理的な思い込み（イラショナル・ビリーフ）を，柔軟で合理的な思考（ラショナル・ビリーフ）へと変容させるためのサポートを行ってください。
-
-        【クライアントの背景情報】
-        - 呼称：{user_name}
-        - 年代：{age_group}
-        - 現在の状況：{current_status}
-        - これまでの経験・得意なこと：{background}
-
-        【クライアントの入力情報】
-        - A（出来事）: {event}
-        - B（信念）: {belief}
-        - C（結果・感情）: {consequence}
-
-        【AIへの特別な指示】
-        ・クライアントへの呼びかけには，必ず「{user_name}さん」（または入力がない場合は「あなた」）を使用し，親身で温かく寄り添うトーンで対話してください。
-        ・クライアントの「背景情報」を十分に加味して回答を作成してください。例えば，社会人経験が豊富な方にはこれまでの実績や乗り越えてきた経験を肯定するようなアプローチを，経験が浅い方にはポテンシャルや今後の成長に寄り添うアプローチを心がけてください。
-
-        【出力要件】
-        以下の2つのセクションに分けて，温かく受容的なトーンで出力してください。
-
-        1. 【D】Dispute（反論・問いかけ）
-        クライアントの「B（信念）」に対する非合理性を優しく指摘し，別の視点に気づかせるための具体的な問いかけや客観的な反論を3つ提示してください。その際，ただ一般論を述べるのではなく，クライアントのこれまでの経験や強み（背景情報）を根拠として交えることで，納得感を高めてください。
+# ==================================================
+# ステップ1：お悩み入力画面
+# ==================================================
+if st.session_state.abcde_step == 1:
+    with st.form("abcde_input_form"):
+        user_name = st.text_input("お名前（苗字またはニックネームで可）", value="あなた")
         
-        2. 【E】Effect（効果・新しい信念）
-        Dの反論を踏まえ，クライアントが心を軽くするための「新しい合理的な思考（ラショナル・ビリーフ）」の候補を2パターン提案し，前向きな行動を促す励ましの言葉を添えてください。
+        st.subheader("【A】モヤモヤした出来事（事実だけを客観的に）")
+        st.caption("例：面接でうまく話せず、不採用の通知が届いた。 / 上司から書類のミスを厳しく注意された。")
+        event = st.text_area("（いつ、どこで、何があったか）", key="input_a")
         
-        【制約条件】
-        ・読点：文章中の読点には必ず「，」を使用すること（「、」は使用しないこと）
-        """
+        st.subheader("【B】その時に頭に浮かんだ「思い込み」や「考え方のクセ」")
+        st.caption("例：自分はどこからも必要とされない人間に違いない。 / 私は絶対にミスをしてはならない。")
+        belief = st.text_area("（〜すべき、絶対に〜である、といった心の声をありのままに）", key="input_b")
+        
+        st.subheader("【C】その結果、生まれた「感情」や「ストレス度」")
+        st.caption("例：ひどく落ち込んでしまい、次の応募をする元気が出ない。悔しくてイライラする。")
+        consequence = st.text_area("（不安、焦り、怒りなどの気持ちや、体に起きた変化）", key="input_c")
+        
+        submit_1 = st.form_submit_button("AIに心を軽くする相談をする ✨")
 
-        with st.spinner('キャリアコンサルタントAIが客観的な視点を整理しています...'):
-            try:
-                response = model.generate_content(prompt)
-                st.success("分析が完了しました！")
-                st.markdown("---")
-                st.markdown(response.text)
+    if submit_1:
+        if not api_key:
+            st.error("⚠️ 左側のメニューにAPIキーを入力してください。")
+        elif not event or not belief or not consequence:
+            st.warning("⚠️ すべての項目を入力してください。")
+        else:
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            
+            # 💡 アイデア2：徹底的な共感を挟むためのプロンプト
+            prompt1 = f"""
+            あなたは相談者に深く寄り添う温かいキャリアコンサルタントです。
+            心理学のABCDE理論に基づき，相談者の「〜すべき」という強迫観念（思い込み）をやさしく解きほぐしてください。
+
+            【相談者の入力】
+            - 呼称：{user_name}
+            - 【A】出来事：{event}
+            - 【B】思い込み：{belief}
+            - 【C】感情・結果：{consequence}
+
+            【出力要件】
+            以下の2つのセクションに分けて出力してください。
+
+            1. 【徹底的な共感と肯定】
+            まずは相談者の辛い感情（C）に対して100%徹底的に共感し，そう思ってしまうのも無理はないと温かく認めてください。説教やアドバイスは一切せず，まずは味方であることを伝えてください。
+
+            2. 【視点を変えるための、直球の反論（D）と効果（E）】
+            相談者の思い込み（B）にある「〜すべき」「絶対に〜でなければならない」という極端な考え方に対して，客観的で論理的な「反論（D）」を、まずは直球で【1つだけ】やさしく提示してください。そして，その新しい捉え方をすることでどのように心が軽くなるか（E）を説明してください。
+
+            【制約条件】
+            - 読点には必ず「，」を使用すること（「、」は使用しない）。
+            """
+            
+            with st.spinner('AIがあなたのお悩みに耳を傾けています...'):
+                try:
+                    response = model.generate_content(prompt1)
+                    # データをセッションに保存して次へ
+                    st.session_state.user_name = user_name
+                    st.session_state.event = event
+                    st.session_state.belief = belief
+                    st.session_state.consequence = consequence
+                    st.session_state.first_analysis = response.text
+                    st.session_state.abcde_step = 2
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"エラーが発生しました: {e}")
+
+# ==================================================
+# ステップ2：最初の回答 ＆ 納得度の確認
+# ==================================================
+elif st.session_state.abcde_step == 2:
+    st.subheader(f"🗣️ AIキャリアコンサルタントからのメッセージ")
+    st.markdown(st.session_state.first_analysis)
+    
+    st.markdown("---")
+    # 💡 アイデア1＆ミックス案：納得度の確認フォーム
+    st.subheader("💡 AIの「新しい捉え方」について，今のあなたのお気持ちを教えてください")
+    st.write("優等生な正論を言われても，心が追いつかないことは当然あります。あなたの本音を教えてください。")
+    
+    with st.form("satisfaction_form"):
+        satisfaction = st.radio(
+            "現在の納得度はどのくらいですか？",
+            ["👍 納得できた（少し気持ちが軽くなった）", 
+             "🤔 あまり納得できない（モヤモヤが残る・まだ不安がある）", 
+             "🙅 全然納得できない（自分の状況には合わない・正論すぎる）"],
+            index=0
+        )
+        
+        st.write("※「あまり納得できない」「全然納得できない」を選んだ方は，**納得いかない理由や，どうしても消えない不安**を下の欄に自由に書き出してください。")
+        moya_reason = st.text_area("納得できない理由や、どうしても引っかかること（例：そうは言われても、やっぱり次の面接も落ちるのが怖いです）")
+        
+        submit_2 = st.form_submit_button("回答を送信する")
+        
+    if submit_2:
+        # 「納得できた」場合はそのまま終了処理
+        if "納得できた" in satisfaction:
+            st.session_state.final_moya = "納得できました。"
+            st.session_state.second_analysis = "ご納得いただけて良かったです！この新しい捉え方を胸に，あなたのペースで一歩ずつ進んでいきましょう。応援しています。"
+            st.session_state.abcde_step = 3
+            st.rerun()
+        else:
+            if not moya_reason:
+                st.warning("⚠️ 納得できない場合は，その理由や引っかかっていることを入力してください。")
+            elif not api_key:
+                st.error("⚠️ APIキーが入力されていません。")
+            else:
+                # 💡 アイデア3：視点変更と再アプローチのプロンプト
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel('gemini-2.5-flash')
                 
-# --- ダウンロード用のテキストを組み立てる ---
-                download_text = f"""【あなたの入力内容】
-■【A】出来事（Activating Event）
-{event}
+                prompt2 = f"""
+                あなたは相談者に深く寄り添う温かいキャリアコンサルタントです。
+                先ほど提示した一般的な反論に対し，相談者は「納得がいかない・心が追いつかない」と感じています。
+                
+                【相談者の状況】
+                - 出来事：{st.session_state.event}
+                - 最初の思い込み：{st.session_state.belief}
+                - 最初のAIの反論：{st.session_state.first_analysis}
+                - 相談者が納得いかない理由（本音の抵抗）：{moya_reason}
 
-■【B】信念・思い込み（Belief）
-{belief}
+                【出力要件】
+                相談者が「そうは言っても…」と不安になる気持ちを、まずは「そうですよね，そう簡単に割り切れるものではないですよね」と完全に受け止めてください（絶対に否定したり論破しようとしないでください）。
+                
+                その上で，今度は【最初とは全く異なる角度の切り口】（例：あえてユーモアを交える，いっそ『最悪の事態』を極端に想像して笑い飛ばしてみる，あるいは大親友のように熱く励ますなど）から，相談者の本音のモヤモヤを打破するような，別の視点での再反論（D2）と新しい効果（E2）を優しく提案してください。
+                一般論（優等生な回答）は厳禁です。
 
-■【C】結果・感情（Consequence）
-{consequence}
+                【制約条件】
+                - 読点には必ず「，」を使用すること。
+                """
+                
+                with st.spinner('AIが別の角度から、あなたのモヤモヤを解消する方法を再考しています...'):
+                    try:
+                        response = model.generate_content(prompt2)
+                        st.session_state.final_moya = moya_reason
+                        st.session_state.second_analysis = response.text
+                        st.session_state.abcde_step = 3
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"エラーが発生しました: {e}")
+
+# ==================================================
+# ステップ3：最終回答 ＆ ダウンロード
+# ==================================================
+elif st.session_state.abcde_step == 3:
+    st.subheader("🏁 カウンセリングの最終結果")
+    
+    st.markdown("### 📥 1回目の相談結果")
+    with st.expander("確認する", expanded=False):
+        st.markdown(st.session_state.first_analysis)
+        
+    st.markdown("### 💬 あなたの深層の本音（モヤモヤの理由）")
+    st.info(st.session_state.final_moya)
+    
+    st.markdown("### 🔄 AIからの再アプローチ・別の視点")
+    st.markdown(st.session_state.second_analysis)
+    
+    # --- ダウンロードテキストの組み立て ---
+    download_text = f"""【心のモヤモヤ解消・ストレスケアシート】
+■【A】出来事
+{st.session_state.event}
+
+■【B】思い込み・考え方のクセ
+{st.session_state.belief}
+
+■【C】感情・結果
+{st.session_state.consequence}
 
 ==================================================
-【AIからの分析結果】
-{response.text}
+【1回目のAIからのメッセージ（共感と直球の反論）】
+{st.session_state.first_analysis}
+
+==================================================
+【あなたの本音（納得いかなかった理由・引っかかり）】
+{st.session_state.final_moya}
+
+==================================================
+【AIからの再アプローチ（別角度からの視点）】
+{st.session_state.second_analysis}
 """
-                
-                # --- ダウンロードボタン ---
-                st.markdown("---")
-                st.download_button(
-                    label="📝 入力内容と分析結果を保存（ダウンロード）する",
-                    data=download_text,
-                    file_name="abcde_result.txt",
-                    mime="text/plain"
-                )
-            except Exception as e:
-                st.error(f"エラーが発生しました。詳細: {e}")
+    
+    st.markdown("---")
+    st.download_button(
+        label="📝 今回の対話内容と分析結果を保存（ダウンロード）する",
+        data=download_text,
+        file_name="stress_care_result.txt",
+        mime="text/plain"
+    )
+    
+    if st.button("もう一度最初から相談する"):
+        st.session_state.abcde_step = 1
+        st.rerun()
+
+# --- ポータルサイトへ戻るボタン ---
+st.markdown("---")
+st.link_button("🏠 C.HARIGOMA キャリア支援ポータルへ戻る", "https://harigoma-career.streamlit.app/")
